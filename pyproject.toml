@@ -1,0 +1,11 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vlr"
+version = "0.0.1"
+authors = [{name="Phos Mankelow", email="joshua@mankelow.org"}]
+description= "A vlr.gg webscraping package"
+readme = "README.md"
+requires-python = ">3.8"

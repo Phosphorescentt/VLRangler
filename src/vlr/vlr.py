@@ -4,7 +4,7 @@ import requests
 
 from bs4 import BeautifulSoup
 
-import model
+from . import model
 
 
 class VLRSession:
