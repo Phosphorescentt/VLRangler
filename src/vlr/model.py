@@ -24,7 +24,7 @@ class PastFixture:
         id: int,
         team1: Team,
         team2: Team,
-        series_result: Tuple[int, int],
+        series_result: Tuple[BOXResult],
         map_results: List[Tuple[int, int]] = [],
         datetime: datetime.datetime = datetime.datetime(1, 1, 1),
     ):

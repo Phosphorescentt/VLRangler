@@ -11,6 +11,7 @@ class VLRSession:
     def __init__(self, url: str = "https://www.vlr.gg"):
         self.url = url
         self.session = requests.session()
+        self.parser = VLRParser()
 
     def _request(self, method: str, url: str):
         return requests.request(method, f"{self.url}{url}")
@@ -18,7 +19,7 @@ class VLRSession:
     def _get(self, url: str):
         return self._request("GET", url)
 
-    def get_team_html(self, id: int, name: str = ""):
+    def _get_team_html(self, id: int, name: str = ""):
         r = self._get(f"/team/{id}/{name}")
         if r.status_code == 200:
             return r.content
@@ -26,17 +27,26 @@ class VLRSession:
             raise requests.HTTPError(f"{r.status_code}")
 
     def get_team(self, id: int, name: str = "") -> model.Team:
-        html = self.get_team_html(id, name)
-        s = BeautifulSoup(html, features="html.parser")
-        display_name = s.find_all("div", {"class": "team-header-name"})[0]
-        return model.Team(id, display_name.h1.string)
+        html = self._get_team_html(id, name)
+        team = self.parser.parse_team_page(id, html)
+        return team
 
     def get_fixtures_for_team(
         self, team: model.Team, paginated: bool = False
     ) -> List[model.PastFixture]:
         if not paginated:
-            # do stuff
-            return None
-        else:
-            # implement me
+            html = self._get(f"/team/matches/{team.id}/{team.display_name}").content
+            s = BeautifulSoup(html, features="html.parser")
             raise NotImplementedError()
+        else:
+            raise NotImplementedError()
+
+
+class VLRParser:
+    def __init__(self):
+        pass
+
+    def parse_team_page(self, id: int, html) -> model.Team:
+        s = BeautifulSoup(html, features="html.parser")
+        display_name = s.find_all("div", {"class": "team-header-name"})[0]
+        return model.Team(id, display_name.h1.string)
