@@ -17,7 +17,7 @@ class Map(Enum):
 
 
 class Team:
-    def __init__(self, id: int, display_name: str):
+    def __init__(self, id: str, display_name: str):
         self.id = id
         self.display_name = display_name
 
@@ -56,11 +56,11 @@ class BOXResult:
 class PastFixture:
     def __init__(
         self,
-        id: int,
-        team0_id: Team,
-        team1_id: Team,
+        id: str,
+        team0_id: str,
+        team1_id: str,
         # series_result: BOXResult,
-        series_result: Tuple[int, int],
+        series_result: Tuple[str, str],
         datetime: datetime.datetime = datetime.datetime(1, 1, 1),
     ):
         self.id = id
@@ -68,3 +68,6 @@ class PastFixture:
         self.team1_id = team1_id
         self.series_result = series_result
         self.datetime = datetime
+
+    def __repr__(self):
+        return f"<PastFixture {self.team0_id} {self.series_result[0]}-{self.series_result[1]} {self.team1_id}>"

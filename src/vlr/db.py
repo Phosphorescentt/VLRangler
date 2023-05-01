@@ -41,6 +41,8 @@ class GenericDatabaseClient:
 class CSVClient(GenericDatabaseClient):
     def __init__(self, root_filepath):
         self.path = Path(root_filepath)
+        self.teams = pd.DataFrame()
+        self.past_fixtures = pd.DataFrame()
 
         # Handle all the cases for existence/nonexistence of the database files.
         match (
@@ -68,10 +70,12 @@ class CSVClient(GenericDatabaseClient):
                 self._update_past_fixutres_df()
 
     def _update_teams_df(self):
-        self.teams = pd.read_csv(self.path / "teams.csv")
+        with open(self.path / "teams.csv", "r") as f:
+            self.teams = pd.read_csv(f)
 
     def _update_past_fixutres_df(self):
-        self.past_fixtures = pd.read_csv(self.path / "past_fixtures.csv")
+        with open(self.path / "past_fixutres.csv", "r") as f:
+            self.past_fixutres = pd.read_csv(f)
 
     def _initialise_teams_file(self):
         with open(self.path / "teams.csv", "w") as f:

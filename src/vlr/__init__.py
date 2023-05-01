@@ -1,3 +1,3 @@
-from .vlr import VLRSession
+from .vlr import VLRParser, VLRSession, VLRHandler
 
-__all__ = ["VLRSession"]
+__all__ = ["VLRParser", "VLRSession", "VLRHandler"]
