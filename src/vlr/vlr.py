@@ -15,7 +15,7 @@ from . import model
 
 class VLRParser:
     """
-    Use this class if you want to parse vlr.gg webpages.
+    Use this class if you want to parse raw vlr.gg web page html.
     """
 
     def __init__(self):
@@ -89,7 +89,7 @@ class VLRParser:
 
 class VLRSession:
     """
-    Use this class if you just want data given back to you in a nice format.
+    Use this class if you just want data given back to you from vlr.gg in a nice format.
     """
 
     def __init__(self, url: str = "https://www.vlr.gg"):
@@ -129,12 +129,10 @@ class VLRSession:
             urls = self.parser.parse_team_results_page(html)
 
         if max_fixtures:
-            print("here")
             urls = urls[:max_fixtures]
 
         fixtures = []
         for url in urls:
-            print(url)
             html = self._get(url).content
             id = self.parser.parse_match_id_from_url(url)
             team_ids, result, dt = self.parser.parse_match_results_page(html)
@@ -172,8 +170,11 @@ class VLRHandler:
 
     def add_team_from_id(self, team_id: str) -> model.Team:
         team = self.get_team_from_id(team_id)
-        # add team to DB
-        raise NotImplementedError()
+        s = self.database.add_team(team)
+        if s:
+            return team
+        else:
+            raise Exception("Something went wrong!")
 
     def add_teams_from_ids(self, team_ids: List[str]) -> List[model.Team]:
         return [self.add_team_from_id(id) for id in team_ids]
@@ -198,4 +199,6 @@ class VLRHandler:
     def add_past_fixtures_for_teams(
         self, teams: List[model.Team], recursive: bool = False
     ) -> List[model.PastFixture]:
+        # If `recursive == true` then every time we come across a team that is
+        # not already in the database, we shouold add it.
         return [self.add_past_fixtures_for_team(team) for team in teams]
