@@ -9,3 +9,6 @@ authors = [{name="Phos Mankelow", email="joshua@mankelow.org"}]
 description= "A vlr.gg webscraping package"
 readme = "README.md"
 requires-python = ">3.8"
+
+[tool.pyright]
+reportGeneralTypeIssues = false
