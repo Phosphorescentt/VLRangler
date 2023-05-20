@@ -29,11 +29,11 @@ class GenericDatabaseClient(ABC):
         pass
 
     @abstractmethod
-    def get_team_by_id(self, team_id: str) -> model.Team:
+    def get_team_by_id(self, team_id: int) -> model.Team:
         pass
 
     @abstractmethod
-    def get_teams_by_id(self, team_ids: List[str]) -> List[model.Team]:
+    def get_teams_by_id(self, team_ids: List[int]) -> List[model.Team]:
         pass
 
     # @abstractmethod
@@ -58,14 +58,6 @@ class GenericDatabaseClient(ABC):
 
     @abstractmethod
     def add_past_fixtures(self, past_fixture: List[model.PastFixture]) -> List[bool]:
-        pass
-
-    @abstractmethod
-    def __del__(self):
-        """
-        This is part of the abstract class to ensure that all implementations
-        of of this subclass have safe shutdowns to make sure no data is lost.
-        """
         pass
 
 
@@ -100,18 +92,12 @@ class CSVClient(GenericDatabaseClient):
                 self._read_teams_df()
                 self._read_past_fixtures_df()
 
-    def __del__(self):
-        # Ensure that the most recent version of the database is saved when the
-        # script is exited.
-        self._read_teams_df()
-        self._read_past_fixtures_df()
-
     def _initialise_teams_file(self):
         with open(self.path / "teams.csv", "w") as f:
             f.write(",display_name")
 
     def _initialise_past_fixtures_file(self):
-        with open(self.path / "past_fixutres.csv", "w") as f:
+        with open(self.path / "past_fixtures.csv", "w") as f:
             f.write(",team1_id,team2_id,series_result,datetime")
 
     def _read_teams_df(self):
@@ -119,7 +105,7 @@ class CSVClient(GenericDatabaseClient):
             self.teams = pd.read_csv(f, index_col=0)
 
     def _read_past_fixtures_df(self):
-        with open(self.path / "past_fixutres.csv", "r") as f:
+        with open(self.path / "past_fixtures.csv", "r") as f:
             self.past_fixutres = pd.read_csv(f, index_col=0)
 
     def _update_teams_file(self):
@@ -130,16 +116,18 @@ class CSVClient(GenericDatabaseClient):
         with open(self.path / "past_fixtures.csv", "w") as f:
             self.past_fixtures.to_csv(f)
 
-    def get_team_by_id(self, team_id: str) -> model.Team:
+    def get_team_by_id(self, team_id: int) -> model.Team:
         try:
             team_df = self.teams.loc[team_id]
             return model.Team(team_id, *team_df)
         except KeyError:
             # This is kinda a bad solution and really all these functions should
-            # return Rust-like result types.
-            return model.Team("-1", f"Failed to find team with ID {team_id}")
+            # return Rust-like result types instead of just an errored team model.
+            return model.Team(
+                -1, f"Failed to find team with (type, ID): ({type(team_id)}, {team_id})"
+            )
 
-    def get_teams_by_id(self, team_ids: List[str]) -> List[model.Team]:
+    def get_teams_by_id(self, team_ids: List[int]) -> List[model.Team]:
         return [self.get_team_by_id(team_id) for team_id in team_ids]
 
     def add_team(self, team: model.Team) -> bool:
@@ -147,7 +135,10 @@ class CSVClient(GenericDatabaseClient):
         # in the dataframe/CSV. At least this means it's loading the CSV
         # properly though!
         try:
-            self.teams.loc[team.id]
+            t = self.get_team_by_id(team.id)
+            if t.id == -1:
+                raise KeyError()
+
             return False
         except KeyError:
             self.teams.loc[team.id] = [team.display_name]

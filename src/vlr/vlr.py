@@ -1,7 +1,5 @@
-import re
+import logging
 import datetime
-
-from pprint import pprint
 
 from typing import Any, List, Optional, Tuple, Type
 
@@ -24,7 +22,7 @@ class VLRParser:
     def clean_string(self, s: str) -> str:
         return s.replace("\t", "").replace("\n", "")
 
-    def parse_team_page(self, id: str, html: bytes) -> model.Team:
+    def parse_team_page(self, id: int, html: bytes) -> model.Team:
         # TODO: Refactor this to not take an ID and instead just return the
         # display name of the team.
         s = BeautifulSoup(html, features="html.parser")
@@ -34,12 +32,12 @@ class VLRParser:
     def parse_team_id_from_url(self, url: str) -> str:
         return url.split("/")[2]
 
-    def parse_match_id_from_url(self, url: str) -> str:
-        return url.split("/")[0]
+    def parse_match_id_from_url(self, url: str) -> int:
+        return int(url.split("/")[0])
 
     def parse_match_results_page(
         self, html: bytes
-    ) -> Tuple[Tuple[str, str], Tuple[str, str], datetime.datetime]:
+    ) -> Tuple[Tuple[int, int], Tuple[int, int], datetime.datetime]:
         s = BeautifulSoup(html, features="html.parser")
         # Get left team
         left_team_div = s.find_all(
@@ -53,14 +51,14 @@ class VLRParser:
         )[0]
         right_team_id = self.parse_team_id_from_url(right_team_div["href"])
 
-        team_ids = (left_team_id, right_team_id)
+        team_ids = (int(left_team_id), int(right_team_id))
 
         # Get scores
         scores_div = s.find_all("div", {"class": "js-spoiler"})[0]
         scores_div_spans = scores_div.find_all("span")
         result = (
-            self.clean_string(scores_div_spans[0].text),
-            self.clean_string(scores_div_spans[2].text),
+            int(self.clean_string(scores_div_spans[0].text)),
+            int(self.clean_string(scores_div_spans[2].text)),
         )
 
         # Get datetime
@@ -103,14 +101,14 @@ class VLRSession:
     def _get(self, url: str):
         return self._request("GET", url)
 
-    def _get_team_html(self, id: str, name: str = ""):
+    def _get_team_html(self, id: int, name: str = ""):
         r = self._get(f"/team/{id}/{name}")
         if r.status_code == 200:
             return r.content
         else:
             raise requests.HTTPError(f"{r.status_code}")
 
-    def get_team(self, id: str, name: str = "") -> model.Team:
+    def get_team(self, id: int, name: str = "") -> model.Team:
         html = self._get_team_html(id, name)
         team = self.parser.parse_team_page(id, html)
         return team
@@ -160,23 +158,27 @@ class VLRHandler:
         else:
             self.session = VLRSession()
 
-    def get_team_from_id(self, team_id: str) -> model.Team:
+    def get_team_from_id(self, team_id: int) -> model.Team:
         # TODO: check if something is in the db before going off to vlr to get
         # the data.
         return self.session.get_team(team_id)
 
-    def get_teams_from_ids(self, team_ids: List[str]) -> List[model.Team]:
+    def get_teams_from_ids(self, team_ids: List[int]) -> List[model.Team]:
         return [self.get_team_from_id(id) for id in team_ids]
 
-    def add_team_from_id(self, team_id: str) -> model.Team:
+    def add_team_from_id(self, team_id: int) -> model.Team:
         team = self.get_team_from_id(team_id)
         s = self.database.add_team(team)
         if s:
             return team
         else:
-            raise Exception("Something went wrong!")
+            # This function will not automatically update
+            logging.info(
+                f"Team with id {team_id} already exists in database. No changes made."
+            )
+            return self.database.get_team_by_id(team_id)
 
-    def add_teams_from_ids(self, team_ids: List[str]) -> List[model.Team]:
+    def add_teams_from_ids(self, team_ids: List[int]) -> List[model.Team]:
         return [self.add_team_from_id(id) for id in team_ids]
 
     def get_past_fixtures_for_team(
