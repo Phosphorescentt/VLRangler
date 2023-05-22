@@ -1,8 +1,10 @@
 import os
+import logging
+import datetime
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import pandas as pd
 
@@ -36,13 +38,15 @@ class GenericDatabaseClient(ABC):
     def get_teams_by_id(self, team_ids: List[int]) -> List[model.Team]:
         pass
 
-    # @abstractmethod
-    # def get_fixture_by_id(self, fixture_id: str) -> model.PastFixture:
-    #     pass
-    #
-    # @abstractmethod
-    # def get_fixtures_by_id(self, fixture_ids: List[str]) -> List[model.PastFixture]:
-    #     pass
+    @abstractmethod
+    def get_past_fixture_by_id(self, fixture_id: str) -> model.PastFixture:
+        pass
+
+    @abstractmethod
+    def get_past_fixtures_by_id(
+        self, fixture_ids: List[str]
+    ) -> List[model.PastFixture]:
+        pass
 
     @abstractmethod
     def add_team(self, team: model.Team) -> bool:
@@ -62,6 +66,15 @@ class GenericDatabaseClient(ABC):
 
 
 class CSVClient(GenericDatabaseClient):
+    class helpers:
+        @staticmethod
+        def split_results_string(x: str) -> Tuple[int, int]:
+            x.replace(" ", "")
+            x.replace("(", "")
+            x.replace(")", "")
+            x = x.split(",")
+            return (int(x[0]), int(x[1]))
+
     def __init__(self, root_filepath):
         self.path = Path(root_filepath)
         self.teams = pd.DataFrame()
@@ -98,15 +111,40 @@ class CSVClient(GenericDatabaseClient):
 
     def _initialise_past_fixtures_file(self):
         with open(self.path / "past_fixtures.csv", "w") as f:
-            f.write(",team1_id,team2_id,series_result,datetime")
+            f.write(",team0_id,team1_id,series_result,datetime")
 
     def _read_teams_df(self):
         with open(self.path / "teams.csv", "r") as f:
-            self.teams = pd.read_csv(f, index_col=0)
+            # Might have to do some processing here to move from an easily
+            # stored format to a Pandas dataframe to allow for storing tuples
+            # or other objects in the .csv file
+            self.teams = pd.read_csv(f, index_col=0, dtype={"display_name": str})
 
     def _read_past_fixtures_df(self):
         with open(self.path / "past_fixtures.csv", "r") as f:
-            self.past_fixutres = pd.read_csv(f, index_col=0)
+            # Might have to do some processing here to move from an easily
+            # stored format to a Pandas dataframe to allow for storing tuples
+            # or other objects in the .csv file
+            self.past_fixtures = pd.read_csv(
+                f,
+                index_col=0,
+                converters={
+                    "team0_id": int,
+                    "team1_id": int,
+                    "series_result": self.helpers.split_results_string,
+                    "datetime": datetime.datetime,
+                },
+            )
+
+            # For example, currently series results are stored in the format
+            # "(team0_score, team1_score)" in the CSV but in memory this
+            # will need to be treated as a tuple. To that end, we have to map
+            # everything in the series_result column to a tuple. Likewise
+            # datetimes are unlikely to be stored in a good format as everything
+            # in the CSV is treated as a string unless it's easy to parse
+            # into somthing else (i.e. an integer or a float).
+
+            self.past_fixtures["series_result"].apply(self.helpers.split_results_string)
 
     def _update_teams_file(self):
         with open(self.path / "teams.csv", "w") as f:
@@ -131,9 +169,6 @@ class CSVClient(GenericDatabaseClient):
         return [self.get_team_by_id(team_id) for team_id in team_ids]
 
     def add_team(self, team: model.Team) -> bool:
-        # Little bug here meaning that you can get multiple duplicate rows
-        # in the dataframe/CSV. At least this means it's loading the CSV
-        # properly though!
         try:
             t = self.get_team_by_id(team.id)
             if t.id == -1:
@@ -148,12 +183,38 @@ class CSVClient(GenericDatabaseClient):
     def add_teams(self, teams: List[model.Team]) -> List[bool]:
         return [self.add_team(team) for team in teams]
 
+    def get_past_fixture_by_id(self, past_fixture_id: int) -> model.PastFixture:
+        try:
+            past_fixture_df = self.past_fixtures.loc[past_fixture_id]
+            return model.PastFixture(past_fixture_id, *past_fixture_df)
+        except KeyError:
+            # This is kinda a bad solution and really all these functions should
+            # return Rust-like result types instead of just an errored team model.
+            return model.PastFixture(-1, -1, -1, (-1, -1), datetime.datetime(1, 1, 1))
+
+    def get_past_fixtures_by_id(
+        self, past_fixture_ids: List[int]
+    ) -> List[model.PastFixture]:
+        return [
+            self.get_past_fixture_by_id(past_fixture_id)
+            for past_fixture_id in past_fixture_ids
+        ]
+
     def add_past_fixture(self, past_fixture: model.PastFixture) -> bool:
         try:
-            self.past_fixtures.loc[past_fixture.id]
+            f = self.get_past_fixture_by_id(past_fixture.id)
+            if f.id == -1:
+                raise KeyError()
+
             return False
         except KeyError:
-            self.teams.loc[past_fixture.id]
+            self.past_fixtures.loc[past_fixture.id] = [
+                past_fixture.team0_id,
+                past_fixture.team1_id,
+                past_fixture.series_result,
+                past_fixture.datetime,
+            ]
+            self._update_past_fixtures_file()
             return True
 
     def add_past_fixtures(self, past_fixtures: List[model.PastFixture]) -> List[bool]:

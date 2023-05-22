@@ -33,7 +33,8 @@ class VLRParser:
         return url.split("/")[2]
 
     def parse_match_id_from_url(self, url: str) -> int:
-        return int(url.split("/")[0])
+        logging.debug(url)
+        return int(url.split("/")[1])
 
     def parse_match_results_page(
         self, html: bytes
@@ -185,7 +186,7 @@ class VLRHandler:
         self,
         team: model.Team,
         pages: Optional[int] = None,
-        max_fixtures: Optional[int] = None,
+        max_fixtures: Optional[int] = 10,
         recursive: bool = False,
     ) -> List[model.PastFixture]:
         if recursive:
@@ -194,13 +195,24 @@ class VLRHandler:
             return self.session.get_past_fixtures_for_team(team, pages, max_fixtures)
 
     def add_past_fixtures_for_team(
-        self, team: model.Team, recursive: bool = False
-    ) -> model.PastFixture:
-        raise NotImplementedError()
+        self,
+        team: model.Team,
+        pages: Optional[int] = None,
+        max_fixtures: Optional[int] = 10,
+        recursive: bool = False,
+    ) -> List[model.PastFixture]:
+        if recursive:
+            # If `recursive == true` then every time we come across a team that is
+            # not already in the database, we shouold add it.
+            raise NotImplementedError()
+        else:
+            past_fixtures = self.get_past_fixtures_for_team(
+                team, pages, max_fixtures, recursive
+            )
+            self.database.add_past_fixtures(past_fixtures)
+            return past_fixtures
 
     def add_past_fixtures_for_teams(
         self, teams: List[model.Team], recursive: bool = False
     ) -> List[model.PastFixture]:
-        # If `recursive == true` then every time we come across a team that is
-        # not already in the database, we shouold add it.
-        return [self.add_past_fixtures_for_team(team) for team in teams]
+        return [self.add_past_fixtures_for_team(team, recursive) for team in teams]
